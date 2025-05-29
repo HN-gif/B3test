@@ -85,44 +85,44 @@ for i in range(len(images) - 1):
 
     # 2. similarity推定
     # 最小二乗法で (1+a, b, tx, ty) を推定
-    A = []
-    b = []
-
-    for (x, y), (xp, yp) in zip(src_pts, dst_pts):
-        A.append([x, -y, 1, 0])
-        A.append([y,  x, 0, 1])
-        b.append(xp)
-        b.append(yp)
-
-    A = np.array(A)
-    b = np.array(b)
-    params, _, _, _ = np.linalg.lstsq(A, b, rcond=None)  # shape: (4,)
-    a, b_, tx, ty = params
-    S = np.array([
-        [1+a, -b_, tx],
-        [b_, 1+a, ty],
-        [0, 0, 1]
-    ], dtype=np.float32)
-    homographies.append(S)
-    # 3. affine推定
-    # 最小二乗法で (a, b, c, d, tx, ty) を推定
     # A = []
     # b = []
+
     # for (x, y), (xp, yp) in zip(src_pts, dst_pts):
-    #     A.append([x, y, 1, 0, 0, 0])
-    #     A.append([0, 0, 0, x, y, 1])
+    #     A.append([x, -y, 1, 0])
+    #     A.append([y,  x, 0, 1])
     #     b.append(xp)
     #     b.append(yp)
+
     # A = np.array(A)
     # b = np.array(b)
-    # params, _, _, _ = np.linalg.lstsq(A, b, rcond=None)  # shape: (6,)
-    # a00, a01, tx, a10, a11, ty = params
-    # H = np.array([
-    #     [a00, a01, tx],
-    #     [a10, a11, ty],
+    # params, _, _, _ = np.linalg.lstsq(A, b, rcond=None)  # shape: (4,)
+    # a, b_, tx, ty = params
+    # S = np.array([
+    #     [1+a, -b_, tx],
+    #     [b_, 1+a, ty],
     #     [0, 0, 1]
     # ], dtype=np.float32)
-    # homographies.append(H)
+    # homographies.append(S)
+    # 3. affine推定
+    # 最小二乗法で (a, b, c, d, tx, ty) を推定
+    A = []
+    b = []
+    for (x, y), (xp, yp) in zip(src_pts, dst_pts):
+        A.append([x, y, 1, 0, 0, 0])
+        A.append([0, 0, 0, x, y, 1])
+        b.append(xp)
+        b.append(yp)
+    A = np.array(A)
+    b = np.array(b)
+    params, _, _, _ = np.linalg.lstsq(A, b, rcond=None)  # shape: (6,)
+    a00, a01, tx, a10, a11, ty = params
+    H = np.array([
+        [a00, a01, tx],
+        [a10, a11, ty],
+        [0, 0, 1]
+    ], dtype=np.float32)
+    homographies.append(H)
 
 
 
@@ -156,21 +156,24 @@ offset = np.array([[1, 0, -x_min], [0, 1, -y_min], [0, 0, 1]])
 # ----------------------------
 # ワーピング
 # ----------------------------
-# cv.warpPerspective(img, M, (600, 800))を使用して、各画像をキャンバスにワーピング
-canvas = np.zeros((canvas_height, canvas_width, 3), dtype=np.uint8)
+accumulator = np.zeros((canvas_height, canvas_width, 3), dtype=np.float32)
+count = np.zeros((canvas_height, canvas_width), dtype=np.float32)
 
 for i, img in enumerate(images):
     M = offset @ cumulative_H[i]
     warp = cv.warpPerspective(img, M, (canvas_width, canvas_height))
     mask = (warp.sum(axis=2) > 0)
-    canvas[mask] = warp[mask]
+    accumulator[mask] += warp[mask]
+    count[mask] += 1
 
+result = (accumulator / np.maximum(count[..., None], 1)).astype(np.uint8)
 
     
 # ----------------------------
 # 結果保存と表示
 # ----------------------------
-cv.imwrite('Result.png', canvas)
+output_path = 'result.png'
+cv.imwrite(output_path, result)
 cv.waitKey(0)
 cv.destroyAllWindows()
 
