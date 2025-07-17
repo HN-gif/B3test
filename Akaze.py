@@ -42,7 +42,7 @@ for i in range(len(images) - 1):
     matches = matcher.knnMatch(descriptors[i], descriptors[i+1], 2)
     good_matches = [m for m, n in matches if m.distance < 0.6 * n.distance]
     
-    if len(good_matches) < 10:
+    if len(good_matches) < 5:
         print(f'画像 {i} と {i+1} の間に十分なマッチがありません。')
         exit(1)
 
@@ -56,14 +56,14 @@ for i in range(len(images) - 1):
     cv.imwrite(f'matches_{i}_{i+1}.png', img_matches)
 
     # ホモグラフィ推定
-    # ４点に絞る、あるいは……
 
-    # しかし一般には、N>=4 点で頑健推定できる findHomography が適切
     src_pts = np.float32([keypoints[i][m.queryIdx].pt for m in good_matches]).reshape(-1, 1, 2)
     dst_pts = np.float32([keypoints[i+1][m.trainIdx].pt for m in good_matches]).reshape(-1, 1, 2)
     if len(src_pts) < 4 or len(dst_pts) < 4:
         print(f'画像 {i} と {i+1} の間に十分なマッチがありません。')
         exit(1)
+
+        
     src_pts = src_pts.reshape(-1, 2)
     dst_pts = dst_pts.reshape(-1, 2)
 
@@ -124,6 +124,13 @@ for i in range(len(images) - 1):
     ], dtype=np.float32)
     homographies.append(H)
 
+    # # 3.1 affine推定（OpenCVの関数を使用）
+    # H, _ = cv.estimateAffinePartial2D(src_pts, dst_pts)
+    # H_affine_inv = cv.invertAffineTransform(H)  # OpenCVの関数は2x3行列を返す
+    # # 3.1の結果を3x3行列に変換
+    # H = np.vstack([H, [0, 0, 1]])  # 2x3 -> 3x3
+    # homographies.append(H)
+
 
 
 
@@ -134,7 +141,8 @@ for i in range(len(images) - 1):
 # ----------------------------
 cumulative_H = [np.eye(3)]
 for H in homographies:
-    cumulative_H.append(cumulative_H[-1] @ H)
+    H_inv = np.linalg.inv(H)  # ホモグラフィの逆行列を計算
+    cumulative_H.append(cumulative_H[-1] @ H_inv)
 
 # ----------------------------
 # キャンバスサイズの推定
@@ -178,4 +186,5 @@ cv.waitKey(0)
 cv.destroyAllWindows()
 
 # Usage:
-# python Akaze.py --input1 IMG_8734.JPG --input2 IMG_8735.JPG --input3 IMG_8736.JPG --input4 IMG_8737.JPG --input5 IMG_8738.JPG
+# python Akaze.py --input1 image1.png --input2 image2.png --input3 image3.png --input4 image4.png
+# python Akaze.py --input1 image1.jpg --input2 image2.jpg --input3 image3.jpg --input4 image4.jpg
